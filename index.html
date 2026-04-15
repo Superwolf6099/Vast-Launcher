@@ -1,0 +1,1385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eagler Launcher - Modular Edition</title>
+<script src="database.js"></script>
+
+<style>
+:root {
+--bg:#0b0b0e;--side:#121217;--card:#1a1a21;--accent:#4ade80;
+--warn:#facc15;--err:#ef4444;--text:#f8f8f2;--steam:#1b2838;
+}
+*{margin:0;padding:0;box-sizing:border-box;font-family:'Segoe UI',sans-serif;}
+body{background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden;}
+
+.sidebar{width:280px;background:var(--side);padding:1.5rem;border-right:1px solid #2d2d35;overflow-y:auto;display:flex;flex-direction:column;}
+.launcher-title{font-size:1.2rem;font-weight:800;color:var(--accent);margin-bottom:2rem;text-align:center;}
+
+.nav-btn{background:transparent;border:1px solid #2d2d35;color:var(--text);padding:10px;margin-bottom:8px;border-radius:6px;cursor:pointer;}
+
+.dropdown-btn{background:none;border:none;color:#fff;width:100%;text-align:left;padding:10px;cursor:pointer;}
+.dropdown-container{display:none;}
+.sidebar-link{padding:8px 20px;color:#aaa;cursor:pointer;}
+.sidebar-link:hover{color:var(--accent);}
+
+.content{flex:1;overflow-y:auto;background:linear-gradient(to bottom,var(--steam),var(--bg));}
+.view-section{display:none;padding:3rem;}
+.view-section.active{display:block;}
+
+.drop-zone{border:2px dashed #444;padding:40px;text-align:center;margin-top:20px;cursor:pointer;}
+.drop-zone.drag{border-color:var(--accent);color:var(--accent);}
+
+.card{background:var(--card);padding:1.5rem;border-radius:10px;border:1px solid #2d2d35;margin-top:20px;}
+
+#right-settings{position:fixed;right:-350px;top:0;width:350px;height:100%;background:var(--side);transition:.3s;padding:2rem;}
+#right-settings.open{right:0;}
+
+.creator-box{display:none;margin-top:20px;}
+.editor-input{width:100%;padding:10px;margin-top:10px;background:#000;border:1px solid #333;color:#fff;}
+.warning{color:var(--warn);margin-top:15px;}
+.editable-field{border:1px dashed transparent;padding:8px;border-radius:6px;min-height:36px;}
+.editable-field.editing{border-color:var(--accent);background:rgba(74,222,128,0.08);}
+.folder-row{display:flex;align-items:center;gap:8px;padding:4px 0;}
+.folder-toggle{width:28px;padding:4px 0;text-align:center;}
+.folder-open{flex:1;text-align:left;}
+.folder-row.dragging,.dragging{opacity:.5;}
+.folder-row.drop-target .folder-open,
+.folder-drop-target{border-color:var(--accent);background:rgba(74,222,128,0.12);}
+.client-row{padding:6px 8px 6px 40px;color:#b3b3ba;cursor:pointer;border-radius:6px;}
+.client-row:hover{background:rgba(255,255,255,0.04);color:var(--accent);}
+
+button {
+    background: transparent;
+    border: 1px solid #2d2d35;
+    color: var(--text);
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+button:hover {
+    background: rgba(255,255,255,0.05);
+    color: var(--accent);
+}
+
+#right-settings button {
+    width: 100%;
+    margin-top: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<div class="sidebar">
+<div class="launcher-title" onclick="showView('home-view')">EAGLER</div>
+<button class="nav-btn" onclick="showView('home-view')">Home Library</button>
+<p id="notes-info" style="color:#a1a1aa;"></p>
+<div id="suggested-list" style="margin-top:10px;"></div>
+<div id="sidebar-hierarchy"></div>
+<button class="nav-btn" style="margin-top:auto" onclick="toggleSettings()">Settings</button>
+</div>
+
+<div id="right-settings">
+<h2>Settings</h2>
+
+<div class="card">
+<input type="checkbox" id="edit-pref" onchange="toggleEditMode()"> Enable Creator Tools
+</div>
+
+<div class="card">
+<input type="checkbox" id="unstable-toggle" onchange="toggleUnstable()"> Show Unstable Versions
+</div>
+
+<div class="card">
+<input type="checkbox" id="new-tab-toggle" onchange="toggleOpenInNewTab()"> Open clients in new tab
+<p style="font-size:12px;color:#a1a1aa;margin-top:8px;">When pressing play on a client it opens in a new tab instead of getting rid of the launcher.</p>
+</div>
+</div>
+
+<div class="content">
+<div id="home-view" class="view-section active">
+<div class="home-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:2rem;">
+    <div>
+        <h2>Notes!</h2>
+        <div class="card" style="border-left: 4px solid var(--accent);">
+            <p><b>Database:</b> This launcher is similar to a file manager for web-based applications. I have aded a few clients to make it easier for the user.</p>
+        </div>
+    </div>
+
+    <div>
+        <h2>Suggested</h2>
+        <div class="card">
+            <div id="suggested-card-list">
+                <div style="color:#a1a1aa;">
+                    <b>Client Template</b>
+                    <p style="margin-top:6px;">Short description for a suggested client will appear here.</p>
+                    <button type="button" style="margin-top:10px;" disabled>PLAY</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div>
+        <h2>Favorites</h2>
+        <div class="card">
+            <div id="favorites-list" style="color:#a1a1aa;">No favorites yet.</div>
+        </div>
+    </div>
+</div>
+
+<div id="creator-dash" class="creator-box">
+    <h3 style="color:var(--warn)">Merge New Client</h3>
+    <div id="drop-zone" class="drop-zone">Drag & Drop HTML Client to Merge</div>
+    <input type="text" id="add-name" class="editor-input" placeholder="Client Name" style="margin-top:15px;">
+    <select id="add-cat" class="editor-input">
+        <option>Vanilla</option>
+        <option>Astra</option>
+        <option>Modpacks</option>
+        <option>Unstable</option>
+    </select>
+    <select id="add-folder" class="editor-input">
+        <option value="">Root Folder</option>
+    </select>
+    <div class="card" style="margin-top:15px;">
+        <h4 style="margin-bottom:10px;">Path-Based Client (recommended for large libraries)</h4>
+        <p style="color:#a1a1aa;font-size:12px;">Store files in a subfolder (example: <code>./clients/</code>) and register paths here.</p>
+        <input type="text" id="path-release" class="editor-input" placeholder="Release Date (YYYY-MM-DD)">
+        <textarea id="path-desc" class="editor-input" placeholder="Description" style="min-height:80px;"></textarea>
+        <input type="text" id="path-wasm" class="editor-input" placeholder="WASM path (example: ./clients/MyClient/wasm.html)">
+        <input type="text" id="path-js" class="editor-input" placeholder="JS path (example: ./clients/MyClient/js.html)">
+        <button type="button" style="margin-top:10px;" onclick="addPathClient()">Add Path Client</button>
+        <input type="text" id="import-base-path" class="editor-input" placeholder="Import base path (default ./)">
+        <button type="button" style="margin-top:10px;" onclick="document.getElementById('folder-import-input').click()">Import Folder Structure</button>
+        <input type="file" id="folder-import-input" webkitdirectory directory multiple style="display:none;">
+    </div>
+    <div class="card" style="margin-top:15px;">
+        <h4 style="margin-bottom:10px;">Merge Existing Clients</h4>
+        <select id="merge-source" class="editor-input">
+            <option value="">Source client</option>
+        </select>
+        <select id="merge-target" class="editor-input">
+            <option value="">Target client</option>
+        </select>
+        <label style="display:block;margin-top:10px;color:#a1a1aa;">
+            <input type="checkbox" id="merge-remove-source"> Remove source after merge
+        </label>
+        <button type="button" style="margin-top:10px;" onclick="mergeExistingClients()">Merge Clients</button>
+    </div>
+</div>
+</div>
+
+<div id="folder-view" class="view-section">
+<h1 id="folder-title">Folder</h1>
+<p id="folder-path" style="color:#a1a1aa;margin-top:6px;"></p>
+<div class="card">
+    <p><b>Description:</b></p>
+    <p id="folder-desc" class="editable-field">No description yet.</p>
+</div>
+<div style="display:flex;gap:10px;margin-top:10px;">
+    <button id="folder-root-btn" onclick="promoteCurrentFolder()">Move to Root</button>
+    <button id="folder-rename-btn" onclick="renameCurrentFolder()">Rename Folder</button>
+    <button id="folder-delete-btn" onclick="deleteCurrentFolder()">Delete Folder</button>
+</div>
+<div class="card">
+    <h3>Subfolders</h3>
+    <div id="folder-subfolders" style="margin-top:10px;"></div>
+</div>
+<div class="card">
+    <h3>Files</h3>
+    <div id="folder-files" style="margin-top:10px;"></div>
+</div>
+</div>
+
+<div id="details-view" class="view-section">
+<h1 id="det-title"></h1>
+<button id="fav-btn" style="margin-top:10px;" onclick="toggleFavorite()">Add Favorite</button>
+<select id="launch-select" class="editor-input" style="max-width:320px;margin-top:10px;"></select>
+<button onclick="launchActive()" style="margin-top:10px;">PLAY</button>
+<button id="add-launch-option-btn" style="display:none;margin-top:10px;" onclick="document.getElementById('launch-option-input').click()">Add Merged Launch Option</button>
+<input type="file" id="launch-option-input" accept=".html,.htm" style="display:none;">
+<button id="del-btn" style="display:none;margin-top:10px;" onclick="deleteClient()">Delete Client</button>
+
+<div id="unstable-warning" class="warning" style="display:none;">
+WARNING: These versions will have bugs...
+</div>
+
+<div class="card">
+<p><b>Release Date:</b></p>
+<p id="det-release" class="editable-field">Unknown</p>
+<p style="margin-top:10px;"><b>Description:</b></p>
+<p id="det-desc" class="editable-field"></p>
+</div>
+</div>
+</div>
+
+<script>
+let activeClients = {};
+let activeID = null;
+let activeFolderPath = "";
+let showUnstable = JSON.parse(localStorage.getItem("show_unstable") || "true");
+let folders = JSON.parse(localStorage.getItem("eagler_folders") || "[]");
+let folderDescriptions = JSON.parse(localStorage.getItem("eagler_folder_descriptions") || "{}");
+let favoriteClients = JSON.parse(localStorage.getItem("favorite_clients") || "[]");
+let openInNewTab = JSON.parse(localStorage.getItem("open_in_new_tab") || "true");
+let expandedFolders = new Set(JSON.parse(localStorage.getItem("expanded_folders") || "[]"));
+let draggedFolderPath = "";
+let draggedClientID = "";
+
+function sanitizeFolderPath(input) {
+    return (input || "")
+        .replace(/\\/g, "/")
+        .split("/")
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .join("/");
+}
+
+function saveFolders() {
+    localStorage.setItem("eagler_folders", JSON.stringify(folders));
+}
+
+function saveFolderDescriptions() {
+    localStorage.setItem("eagler_folder_descriptions", JSON.stringify(folderDescriptions));
+}
+
+function saveFavorites() {
+    localStorage.setItem("favorite_clients", JSON.stringify(favoriteClients));
+}
+
+function saveExpandedFolders() {
+    localStorage.setItem("expanded_folders", JSON.stringify([...expandedFolders]));
+}
+
+function addFolderWithParents(path) {
+    const clean = sanitizeFolderPath(path);
+    if (!clean) return;
+    const parts = clean.split("/");
+    let current = "";
+    parts.forEach((part) => {
+        current = current ? current + "/" + part : part;
+        if (!folders.includes(current)) folders.push(current);
+    });
+}
+
+function getFolderName(path) {
+    const clean = sanitizeFolderPath(path);
+    if (!clean) return "Root";
+    const parts = clean.split("/");
+    return parts[parts.length - 1];
+}
+
+function getParentFolder(path) {
+    const clean = sanitizeFolderPath(path);
+    const parts = clean.split("/");
+    parts.pop();
+    return parts.join("/");
+}
+
+function isDirectChildFolder(parentPath, childPath) {
+    const parent = sanitizeFolderPath(parentPath);
+    const child = sanitizeFolderPath(childPath);
+    const prefix = parent ? parent + "/" : "";
+    if (!child.startsWith(prefix)) return false;
+    const remain = child.slice(prefix.length);
+    return remain.length > 0 && !remain.includes("/");
+}
+
+function getVisibleClientIDs() {
+    return Object.keys(activeClients).filter((id) => showUnstable || activeClients[id].cat !== "Unstable");
+}
+
+function getDirectClients(folderPath, visibleIDs) {
+    const clean = sanitizeFolderPath(folderPath);
+    return visibleIDs
+        .filter((id) => sanitizeFolderPath(activeClients[id].folderPath || "") === clean)
+        .sort((a, b) => (activeClients[a].name || "").localeCompare(activeClients[b].name || ""));
+}
+
+function getCreatorFolderPath() {
+    const value = document.getElementById("add-folder").value || "";
+    return sanitizeFolderPath(value);
+}
+
+function createFolderPrompt() {
+    const raw = prompt("Enter folder or subfolder path (example: Vanilla/1.8):");
+    if (raw === null) return;
+    const folderPath = sanitizeFolderPath(raw);
+    if (!folderPath) {
+        alert("Folder name cannot be empty.");
+        return;
+    }
+    addFolderWithParents(folderPath);
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    expandedFolders.add(folderPath);
+    saveFolders();
+    saveExpandedFolders();
+    renderFolderOptions();
+    initSidebar();
+    alert("Folder created: " + folderPath);
+}
+
+function renderFolderOptions() {
+    const select = document.getElementById("add-folder");
+    if (!select) return;
+    select.innerHTML = '<option value="">Root Folder</option>';
+
+    const visible = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    visible.forEach((path) => {
+        const opt = document.createElement("option");
+        opt.value = path;
+        opt.textContent = path;
+        select.appendChild(opt);
+    });
+}
+
+function renderClientMergeOptions() {
+    const source = document.getElementById("merge-source");
+    const target = document.getElementById("merge-target");
+    if (!source || !target) return;
+
+    const previousSource = source.value;
+    const previousTarget = target.value;
+    const options = Object.keys(activeClients)
+        .sort((a, b) => (activeClients[a].name || "").localeCompare(activeClients[b].name || ""));
+
+    source.innerHTML = '<option value="">Source client</option>';
+    target.innerHTML = '<option value="">Target client</option>';
+
+    options.forEach((id) => {
+        const sourceOpt = document.createElement("option");
+        sourceOpt.value = id;
+        sourceOpt.textContent = activeClients[id].name;
+        source.appendChild(sourceOpt);
+
+        const targetOpt = document.createElement("option");
+        targetOpt.value = id;
+        targetOpt.textContent = activeClients[id].name;
+        target.appendChild(targetOpt);
+    });
+
+    if (activeClients[previousSource]) source.value = previousSource;
+    if (activeClients[previousTarget]) target.value = previousTarget;
+}
+
+function normalizeClients() {
+    Object.keys(activeClients).forEach((id) => {
+        const client = activeClients[id];
+        if (!client.desc) client.desc = "No description yet.";
+        if (!client.release) client.release = "Unknown";
+        if (!Array.isArray(client.launches)) client.launches = [];
+        if (!client.folderPath) client.folderPath = sanitizeFolderPath(client.cat || "Unsorted");
+        client.folderPath = sanitizeFolderPath(client.folderPath);
+        client.launches = client.launches.filter((l) => l && (l.path || l.html));
+        client.launches.forEach((l, idx) => {
+            if (!l.label) l.label = "Option " + (idx + 1);
+        });
+        addFolderWithParents(client.folderPath);
+    });
+    favoriteClients = favoriteClients.filter((id) => activeClients[id]);
+    saveFavorites();
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    saveFolders();
+}
+
+function setupDropZone() {
+    const dropZone = document.getElementById("drop-zone");
+    const fileInput = document.createElement("input");
+    fileInput.type = "file";
+    fileInput.accept = ".html,.htm";
+    fileInput.style.display = "none";
+    document.body.appendChild(fileInput);
+
+    dropZone.onclick = () => fileInput.click();
+    fileInput.onchange = () => {
+        const file = fileInput.files[0];
+        if (file) importClientFile(file);
+        fileInput.value = "";
+    };
+
+    ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+        dropZone.addEventListener(eventName, (ev) => ev.preventDefault());
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+        const file = e.dataTransfer.files[0];
+        if (file) importClientFile(file);
+    });
+}
+
+function importClientFile(file) {
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith(".html") && !lowerName.endsWith(".htm")) {
+        alert("Only .html or .htm files can be imported.");
+        return;
+    }
+    handleFileMerge(file);
+}
+
+function handleFileMerge(file) {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const id = "merged_" + Date.now();
+        const name = document.getElementById("add-name").value || file.name.replace(".html", "");
+        activeClients[id] = {
+            name: name,
+            cat: document.getElementById("add-cat").value,
+            folderPath: getCreatorFolderPath() || sanitizeFolderPath(document.getElementById("add-cat").value),
+            desc: "Merged: " + file.name,
+            release: new Date().toISOString().slice(0, 10),
+            launches: [{ label: "Local", html: e.target.result, fileName: file.name }]
+        };
+        addFolderWithParents(activeClients[id].folderPath);
+        folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+        saveFolders();
+        renderFolderOptions();
+        try {
+            saveAll();
+        } catch (err) {
+            delete activeClients[id];
+            alert("Import failed. Storage may be full for this browser.");
+            return;
+        }
+        initSidebar();
+        updateHomeDashboard();
+        document.getElementById("add-name").value = "";
+        alert("Imported: " + name);
+    };
+    reader.onerror = function() {
+        alert("Could not read that file.");
+    };
+    reader.readAsText(file);
+}
+
+function detectLaunchLabel(fileName) {
+    const lower = fileName.toLowerCase();
+    if (lower.includes("wasm")) return "WASM";
+    if (lower.includes("js")) return "JS";
+    return "HTML";
+}
+
+function normalizeBaseName(fileName) {
+    return fileName
+        .replace(/\.html?$/i, "")
+        .replace(/(^|[._\-\s])(wasm|js)(?=$|[._\-\s])/ig, "$1")
+        .replace(/[._\-\s]+/g, " ")
+        .trim() || fileName.replace(/\.html?$/i, "");
+}
+
+function buildJoinedPath(base, relative) {
+    const safeBase = (base || "./").trim() || "./";
+    const cleanRelative = relative.replace(/\\/g, "/");
+    return safeBase.endsWith("/") ? safeBase + cleanRelative : safeBase + "/" + cleanRelative;
+}
+
+function findClientByFolderAndName(folderPath, name) {
+    const cleanFolder = sanitizeFolderPath(folderPath);
+    const matchID = Object.keys(activeClients).find((id) => {
+        return sanitizeFolderPath(activeClients[id].folderPath || "") === cleanFolder && (activeClients[id].name || "") === name;
+    });
+    return matchID || null;
+}
+
+function importFolderStructure(fileList) {
+    if (!fileList || !fileList.length) return;
+    const basePath = document.getElementById("import-base-path").value || "./";
+    let createdClients = 0;
+    let addedLaunches = 0;
+
+    Array.from(fileList).forEach((file) => {
+        const relativePath = (file.webkitRelativePath || "").replace(/\\/g, "/");
+        if (!relativePath) return;
+
+        const parts = relativePath.split("/");
+        const fileName = parts.pop();
+        const folderPath = sanitizeFolderPath(parts.join("/"));
+        addFolderWithParents(folderPath);
+
+        if (!/\.html?$/i.test(fileName)) return;
+
+        const launchLabel = detectLaunchLabel(fileName);
+        const clientName = normalizeBaseName(fileName);
+        const launchPath = buildJoinedPath(basePath, relativePath);
+        let clientID = findClientByFolderAndName(folderPath, clientName);
+
+        if (!clientID) {
+            clientID = "import_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
+            activeClients[clientID] = {
+                name: clientName,
+                cat: document.getElementById("add-cat").value,
+                folderPath: folderPath,
+                release: "Unknown",
+                desc: "Imported from folder structure.",
+                launches: []
+            };
+            createdClients += 1;
+        }
+
+        const exists = activeClients[clientID].launches.some((l) => l.path === launchPath);
+        if (!exists) {
+            activeClients[clientID].launches.push({ label: launchLabel, path: launchPath });
+            addedLaunches += 1;
+        }
+    });
+
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    saveFolders();
+    saveAll();
+    renderFolderOptions();
+    initSidebar();
+    updateHomeDashboard();
+    alert("Imported folder structure. New clients: " + createdClients + ", launch files added: " + addedLaunches + ".");
+}
+
+function setupFolderImporter() {
+    const input = document.getElementById("folder-import-input");
+    input.addEventListener("change", () => {
+        importFolderStructure(input.files);
+        input.value = "";
+    });
+}
+
+function addPathClient() {
+    const name = (document.getElementById("add-name").value || "").trim();
+    if (!name) {
+        alert("Enter a client name first.");
+        return;
+    }
+
+    const wasmPath = (document.getElementById("path-wasm").value || "").trim();
+    const jsPath = (document.getElementById("path-js").value || "").trim();
+    if (!wasmPath && !jsPath) {
+        alert("Add at least one launch path (WASM or JS).");
+        return;
+    }
+
+    const launches = [];
+    if (wasmPath) launches.push({ label: "WASM", path: wasmPath });
+    if (jsPath) launches.push({ label: "JS", path: jsPath });
+
+    const id = "path_" + Date.now();
+    activeClients[id] = {
+        name: name,
+        cat: document.getElementById("add-cat").value,
+        folderPath: getCreatorFolderPath() || sanitizeFolderPath(document.getElementById("add-cat").value),
+        release: (document.getElementById("path-release").value || "").trim() || "Unknown",
+        desc: (document.getElementById("path-desc").value || "").trim() || "Path-based client.",
+        launches: launches
+    };
+    addFolderWithParents(activeClients[id].folderPath);
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    saveFolders();
+    renderFolderOptions();
+
+    saveAll();
+    initSidebar();
+    updateHomeDashboard();
+
+    document.getElementById("add-name").value = "";
+    document.getElementById("path-release").value = "";
+    document.getElementById("path-desc").value = "";
+    document.getElementById("path-wasm").value = "";
+    document.getElementById("path-js").value = "";
+    alert("Added path client: " + name);
+}
+
+function cloneLaunchOption(launch, sourceName) {
+    const cloned = {};
+    Object.keys(launch).forEach((key) => {
+        cloned[key] = launch[key];
+    });
+    cloned.label = sourceName + " - " + (launch.label || "Launch");
+    return cloned;
+}
+
+function mergeExistingClients() {
+    const sourceID = document.getElementById("merge-source").value;
+    const targetID = document.getElementById("merge-target").value;
+    const removeSource = document.getElementById("merge-remove-source").checked;
+
+    if (!sourceID || !targetID) {
+        alert("Pick both a source client and a target client.");
+        return;
+    }
+    if (sourceID === targetID) {
+        alert("Source and target must be different clients.");
+        return;
+    }
+    if (!activeClients[sourceID] || !activeClients[targetID]) {
+        alert("One of those clients no longer exists.");
+        renderClientMergeOptions();
+        return;
+    }
+
+    const source = activeClients[sourceID];
+    const target = activeClients[targetID];
+    if (!source.launches || !source.launches.length) {
+        alert("The source client has no launch options to merge.");
+        return;
+    }
+
+    target.launches = target.launches || [];
+    source.launches.forEach((launch) => {
+        target.launches.push(cloneLaunchOption(launch, source.name));
+    });
+
+    if (removeSource) {
+        delete activeClients[sourceID];
+        favoriteClients = favoriteClients.filter((id) => id !== sourceID);
+        if (activeID === sourceID) activeID = targetID;
+    }
+
+    saveAll();
+    saveFavorites();
+    renderClientMergeOptions();
+    initSidebar();
+    updateHomeDashboard();
+    if (activeID === targetID) {
+        renderLaunchOptions(target);
+    }
+    alert("Merged " + source.name + " into " + target.name + ".");
+}
+
+function replaceFolderPrefix(path, oldPrefix, newPrefix) {
+    if (path === oldPrefix) return newPrefix;
+    if (path.startsWith(oldPrefix + "/")) return newPrefix + path.slice(oldPrefix.length);
+    return path;
+}
+
+function renameFolderPath(oldPath, newPath) {
+    const from = sanitizeFolderPath(oldPath);
+    const to = sanitizeFolderPath(newPath);
+    if (!from || !to) return;
+
+    folders = folders.map((path) => replaceFolderPrefix(path, from, to));
+    const nextDescriptions = {};
+    Object.keys(folderDescriptions).forEach((path) => {
+        nextDescriptions[replaceFolderPrefix(sanitizeFolderPath(path), from, to)] = folderDescriptions[path];
+    });
+    folderDescriptions = nextDescriptions;
+    Object.keys(activeClients).forEach((id) => {
+        const current = sanitizeFolderPath(activeClients[id].folderPath || "");
+        activeClients[id].folderPath = replaceFolderPrefix(current, from, to);
+    });
+    activeFolderPath = replaceFolderPrefix(activeFolderPath, from, to);
+    expandedFolders = new Set([...expandedFolders].map((path) => replaceFolderPrefix(path, from, to)));
+
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    saveFolders();
+    saveFolderDescriptions();
+    saveExpandedFolders();
+    saveAll();
+    renderFolderOptions();
+    initSidebar();
+    renderFolderView();
+}
+
+function moveFolderTo(movingPath, targetParentPath) {
+    const moving = sanitizeFolderPath(movingPath);
+    const targetParent = sanitizeFolderPath(targetParentPath);
+    if (!moving) return;
+    if (targetParent === moving || targetParent.startsWith(moving + "/")) {
+        alert("A folder cannot be moved inside itself.");
+        return;
+    }
+
+    const newPath = sanitizeFolderPath(targetParent ? targetParent + "/" + getFolderName(moving) : getFolderName(moving));
+    if (newPath === moving) return;
+    if (folders.includes(newPath)) {
+        alert("That folder already exists there.");
+        return;
+    }
+
+    addFolderWithParents(targetParent);
+    renameFolderPath(moving, newPath);
+    expandedFolders.add(targetParent);
+    expandedFolders.add(newPath);
+    saveExpandedFolders();
+    initSidebar();
+    if (activeFolderPath) renderFolderView();
+}
+
+function moveClientTo(clientID, targetFolderPath) {
+    if (!clientID || !activeClients[clientID]) return;
+    const targetPath = sanitizeFolderPath(targetFolderPath);
+    activeClients[clientID].folderPath = targetPath;
+    addFolderWithParents(targetPath);
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    saveFolders();
+    saveAll();
+    renderFolderOptions();
+    initSidebar();
+    updateHomeDashboard();
+    if (activeFolderPath || document.getElementById("folder-view").classList.contains("active")) {
+        renderFolderView();
+    }
+}
+
+function setupFolderDrag(row, folderPath) {
+    row.draggable = true;
+    row.addEventListener("dragstart", (event) => {
+        draggedFolderPath = folderPath;
+        row.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", folderPath);
+    });
+    row.addEventListener("dragend", () => {
+        draggedFolderPath = "";
+        row.classList.remove("dragging");
+        clearFolderDropTargets();
+    });
+}
+
+function setupClientDrag(row, clientID) {
+    row.draggable = true;
+    row.addEventListener("dragstart", (event) => {
+        draggedClientID = clientID;
+        row.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/eagler-client", clientID);
+    });
+    row.addEventListener("dragend", () => {
+        draggedClientID = "";
+        row.classList.remove("dragging");
+        clearFolderDropTargets();
+    });
+}
+
+function clearFolderDropTargets() {
+    document.querySelectorAll(".drop-target,.folder-drop-target").forEach((el) => {
+        el.classList.remove("drop-target");
+        el.classList.remove("folder-drop-target");
+    });
+}
+
+function setupFolderDrop(target, targetFolderPath) {
+    const targetPath = sanitizeFolderPath(targetFolderPath);
+    target.ondragover = (event) => {
+        if (draggedClientID) {
+            event.preventDefault();
+            target.classList.add("drop-target");
+            target.classList.add("folder-drop-target");
+            event.dataTransfer.dropEffect = "move";
+            return;
+        }
+        const moving = sanitizeFolderPath(draggedFolderPath || event.dataTransfer.getData("text/plain"));
+        if (!moving || moving === targetPath || targetPath.startsWith(moving + "/")) return;
+        event.preventDefault();
+        target.classList.add("drop-target");
+        target.classList.add("folder-drop-target");
+        event.dataTransfer.dropEffect = "move";
+    };
+    target.ondragleave = () => {
+        target.classList.remove("drop-target");
+        target.classList.remove("folder-drop-target");
+    };
+    target.ondrop = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        target.classList.remove("drop-target");
+        target.classList.remove("folder-drop-target");
+        const clientID = draggedClientID || event.dataTransfer.getData("application/eagler-client");
+        if (clientID) {
+            moveClientTo(clientID, targetPath);
+        } else {
+            const moving = sanitizeFolderPath(draggedFolderPath || event.dataTransfer.getData("text/plain"));
+            if (moving) moveFolderTo(moving, targetPath);
+        }
+        draggedFolderPath = "";
+        draggedClientID = "";
+        clearFolderDropTargets();
+    };
+}
+
+function deleteFolderPath(path) {
+    const target = sanitizeFolderPath(path);
+    if (!target) return;
+
+    folders = folders.filter((folder) => folder !== target && !folder.startsWith(target + "/"));
+    Object.keys(folderDescriptions).forEach((path) => {
+        const cleanPath = sanitizeFolderPath(path);
+        if (cleanPath === target || cleanPath.startsWith(target + "/")) {
+            delete folderDescriptions[path];
+        }
+    });
+    Object.keys(activeClients).forEach((id) => {
+        const folderPath = sanitizeFolderPath(activeClients[id].folderPath || "");
+        if (folderPath === target || folderPath.startsWith(target + "/")) {
+            if (activeID === id) activeID = null;
+            favoriteClients = favoriteClients.filter((favID) => favID !== id);
+            delete activeClients[id];
+        }
+    });
+    expandedFolders = new Set([...expandedFolders].filter((p) => p !== target && !p.startsWith(target + "/")));
+    if (activeFolderPath === target || activeFolderPath.startsWith(target + "/")) activeFolderPath = "";
+
+    saveFolders();
+    saveFolderDescriptions();
+    saveFavorites();
+    saveExpandedFolders();
+    saveAll();
+    renderFolderOptions();
+    initSidebar();
+    updateHomeDashboard();
+    showView("home-view");
+}
+
+function renameCurrentFolder() {
+    if (!activeFolderPath) {
+        alert("Root folder cannot be renamed.");
+        return;
+    }
+    const raw = prompt("Rename folder path:", activeFolderPath);
+    if (raw === null) return;
+    const newPath = sanitizeFolderPath(raw);
+    if (!newPath) {
+        alert("Folder name cannot be empty.");
+        return;
+    }
+    if (newPath === activeFolderPath) return;
+    renameFolderPath(activeFolderPath, newPath);
+}
+
+function deleteCurrentFolder() {
+    if (!activeFolderPath) {
+        alert("Root folder cannot be deleted.");
+        return;
+    }
+    if (!confirm("Delete this folder, all subfolders, and all files inside it?")) return;
+    deleteFolderPath(activeFolderPath);
+}
+
+function promoteCurrentFolder() {
+    if (!activeFolderPath) {
+        alert("This folder is already at the root.");
+        return;
+    }
+    if (!getParentFolder(activeFolderPath)) {
+        alert("This folder is already a regular folder.");
+        return;
+    }
+    moveFolderTo(activeFolderPath, "");
+}
+
+function getSelectedLaunch(client) {
+    const select = document.getElementById("launch-select");
+    const idx = Number(select.value || 0);
+    if (Number.isNaN(idx)) return client.launches[0];
+    return client.launches[idx] || client.launches[0];
+}
+
+function renderLaunchOptions(client) {
+    const select = document.getElementById("launch-select");
+    select.innerHTML = "";
+    if (!client.launches || !client.launches.length) {
+        const opt = document.createElement("option");
+        opt.value = "0";
+        opt.textContent = "No launch options";
+        select.appendChild(opt);
+        return;
+    }
+    client.launches.forEach((launch, idx) => {
+        const opt = document.createElement("option");
+        opt.value = String(idx);
+        opt.textContent = launch.label || ("Option " + (idx + 1));
+        select.appendChild(opt);
+    });
+}
+
+function updateFavoriteButton() {
+    const btn = document.getElementById("fav-btn");
+    if (!btn) return;
+    const isFavorite = activeID && favoriteClients.includes(activeID);
+    btn.innerText = isFavorite ? "Remove Favorite" : "Add Favorite";
+}
+
+function toggleFavorite() {
+    if (!activeID || !activeClients[activeID]) return;
+    if (favoriteClients.includes(activeID)) {
+        favoriteClients = favoriteClients.filter((id) => id !== activeID);
+    } else {
+        favoriteClients.push(activeID);
+    }
+    favoriteClients = [...new Set(favoriteClients)].filter((id) => activeClients[id]);
+    saveFavorites();
+    updateFavoriteButton();
+    updateHomeDashboard();
+}
+
+function addMergedLaunchOption(file) {
+    if (!activeID || !activeClients[activeID]) {
+        alert("Open a client first.");
+        return;
+    }
+    const lowerName = file.name.toLowerCase();
+    if (!lowerName.endsWith(".html") && !lowerName.endsWith(".htm")) {
+        alert("Only .html or .htm files can be added as launch options.");
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const defaultLabel = detectLaunchLabel(file.name);
+        const label = (prompt("Launch option name:", defaultLabel) || defaultLabel).trim();
+        activeClients[activeID].launches.push({
+            label: label || "HTML",
+            html: e.target.result,
+            fileName: file.name
+        });
+
+        try {
+            saveAll();
+        } catch (err) {
+            activeClients[activeID].launches.pop();
+            alert("Could not add launch option. Browser storage may be full.");
+            return;
+        }
+
+        renderLaunchOptions(activeClients[activeID]);
+        document.getElementById("launch-select").value = String(activeClients[activeID].launches.length - 1);
+        alert("Added launch option: " + (label || "HTML"));
+    };
+    reader.onerror = function() {
+        alert("Could not read that file.");
+    };
+    reader.readAsText(file);
+}
+
+function setupLaunchOptionImporter() {
+    const input = document.getElementById("launch-option-input");
+    input.addEventListener("change", () => {
+        const file = input.files[0];
+        if (file) addMergedLaunchOption(file);
+        input.value = "";
+    });
+}
+
+function launchActive() {
+    if (!activeID || !activeClients[activeID] || !activeClients[activeID].launches || !activeClients[activeID].launches.length) {
+        alert("Pick a client first.");
+        return;
+    }
+    const launch = getSelectedLaunch(activeClients[activeID]);
+    let launchTarget = launch.path || "";
+
+    if (launch.html) {
+        const blob = new Blob([launch.html], { type: "text/html" });
+        launchTarget = URL.createObjectURL(blob);
+    }
+
+    if (!launchTarget) {
+        alert("This client has no launch path or HTML content.");
+        return;
+    }
+
+    if (openInNewTab) {
+        const launched = window.open(launchTarget, "_blank");
+        if (!launched) {
+            alert("Popup blocked. Allow popups for this page to launch clients.");
+        }
+        return;
+    }
+
+    window.location.href = launchTarget;
+}
+
+function playClient(id) {
+    loadClient(id);
+    launchActive();
+}
+
+function initSidebar() {
+    const side = document.getElementById("sidebar-hierarchy");
+    side.innerHTML = "";
+    setupFolderDrop(side, "");
+    const visibleIDs = getVisibleClientIDs();
+    visibleIDs.forEach((id) => addFolderWithParents(activeClients[id].folderPath || ""));
+    folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    saveFolders();
+    const folderPaths = [...folders];
+
+    renderFolderBranch("", 0, side, folderPaths, visibleIDs);
+
+    const rootClients = getDirectClients("", visibleIDs);
+    if (rootClients.length) {
+        const rootTitle = document.createElement("div");
+        rootTitle.style.marginTop = "8px";
+        rootTitle.style.fontSize = "12px";
+        rootTitle.style.color = "#a1a1aa";
+        rootTitle.innerText = "Root Files";
+        side.appendChild(rootTitle);
+
+        rootClients.forEach((id) => {
+            const clientEl = document.createElement("div");
+            clientEl.className = "client-row";
+            clientEl.style.paddingLeft = "8px";
+            clientEl.textContent = activeClients[id].name;
+            clientEl.onclick = () => loadClient(id);
+            setupClientDrag(clientEl, id);
+            side.appendChild(clientEl);
+        });
+    }
+
+    const creatorEnabled = document.getElementById("edit-pref") && document.getElementById("edit-pref").checked;
+    if (creatorEnabled) {
+        const createFolderBtn = document.createElement("button");
+        createFolderBtn.className = "nav-btn";
+        createFolderBtn.style.marginTop = "10px";
+        createFolderBtn.textContent = "Create Folder/Subfolder";
+        createFolderBtn.onclick = createFolderPrompt;
+        side.appendChild(createFolderBtn);
+    }
+}
+
+function renderFolderBranch(parentPath, depth, container, folderPaths, visibleIDs) {
+    const children = folderPaths
+        .filter((path) => isDirectChildFolder(parentPath, path))
+        .sort((a, b) => a.localeCompare(b));
+    children.forEach((folderPath) => {
+        const row = document.createElement("div");
+        row.className = "folder-row";
+        row.style.paddingLeft = (depth * 14) + "px";
+
+        const toggleBtn = document.createElement("button");
+        toggleBtn.className = "folder-toggle nav-btn";
+        toggleBtn.textContent = expandedFolders.has(folderPath) ? "v" : ">";
+        toggleBtn.onclick = (e) => toggleFolderExpand(folderPath, e);
+
+        const openBtn = document.createElement("button");
+        openBtn.className = "folder-open nav-btn";
+        openBtn.textContent = getFolderName(folderPath);
+        openBtn.onclick = () => openFolder(folderPath);
+
+        row.appendChild(toggleBtn);
+        row.appendChild(openBtn);
+        setupFolderDrag(row, folderPath);
+        setupFolderDrop(row, folderPath);
+        container.appendChild(row);
+
+        if (expandedFolders.has(folderPath)) {
+            const clients = getDirectClients(folderPath, visibleIDs);
+            clients.forEach((id) => {
+                const clientEl = document.createElement("div");
+                clientEl.className = "client-row";
+                clientEl.style.paddingLeft = ((depth + 1) * 14 + 24) + "px";
+                clientEl.textContent = activeClients[id].name;
+                clientEl.onclick = () => loadClient(id);
+                setupClientDrag(clientEl, id);
+                container.appendChild(clientEl);
+            });
+            renderFolderBranch(folderPath, depth + 1, container, folderPaths, visibleIDs);
+        }
+    });
+}
+
+function toggleFolderExpand(path, event) {
+    if (event) event.stopPropagation();
+    if (expandedFolders.has(path)) expandedFolders.delete(path);
+    else expandedFolders.add(path);
+    saveExpandedFolders();
+    initSidebar();
+}
+
+function openFolder(path) {
+    activeFolderPath = sanitizeFolderPath(path);
+    renderFolderView();
+    showView("folder-view");
+}
+
+function renderFolderView() {
+    const folderTitle = document.getElementById("folder-title");
+    const folderPathEl = document.getElementById("folder-path");
+    const folderDescEl = document.getElementById("folder-desc");
+    const subfoldersEl = document.getElementById("folder-subfolders");
+    const filesEl = document.getElementById("folder-files");
+    const rootBtn = document.getElementById("folder-root-btn");
+    const renameBtn = document.getElementById("folder-rename-btn");
+    const deleteBtn = document.getElementById("folder-delete-btn");
+    const visibleIDs = getVisibleClientIDs();
+
+    folderTitle.innerText = getFolderName(activeFolderPath);
+    folderPathEl.innerText = activeFolderPath || "/";
+    folderDescEl.innerText = folderDescriptions[activeFolderPath] || "No description yet.";
+    const creatorActive = document.getElementById("edit-pref").checked;
+    folderDescEl.contentEditable = creatorActive ? "true" : "false";
+    folderDescEl.classList.toggle("editing", creatorActive);
+    rootBtn.disabled = !activeFolderPath || !getParentFolder(activeFolderPath);
+    renameBtn.disabled = !activeFolderPath;
+    deleteBtn.disabled = !activeFolderPath;
+
+    const childFolders = folders.filter((path) => isDirectChildFolder(activeFolderPath, path));
+    subfoldersEl.innerHTML = "";
+    setupFolderDrop(subfoldersEl, activeFolderPath);
+    if (!childFolders.length) {
+        subfoldersEl.innerText = "No subfolders.";
+    } else {
+        childFolders.forEach((path) => {
+            const row = document.createElement("div");
+            row.className = "folder-row";
+
+            const openBtn = document.createElement("button");
+            openBtn.className = "folder-open nav-btn";
+            openBtn.textContent = getFolderName(path);
+            openBtn.onclick = () => openFolder(path);
+
+            const rootBtn = document.createElement("button");
+            rootBtn.textContent = "Move to Root";
+            rootBtn.disabled = !getParentFolder(path);
+            rootBtn.onclick = (event) => {
+                event.stopPropagation();
+                moveFolderTo(path, "");
+            };
+
+            row.appendChild(openBtn);
+            row.appendChild(rootBtn);
+            setupFolderDrag(row, path);
+            setupFolderDrop(row, path);
+            subfoldersEl.appendChild(row);
+        });
+    }
+
+    const cleanActive = sanitizeFolderPath(activeFolderPath);
+    const folderFiles = visibleIDs
+        .filter((id) => {
+            const fileFolder = sanitizeFolderPath(activeClients[id].folderPath || "");
+            if (!cleanActive) return true;
+            return fileFolder === cleanActive || fileFolder.startsWith(cleanActive + "/");
+        })
+        .sort((a, b) => (activeClients[a].name || "").localeCompare(activeClients[b].name || ""));
+    filesEl.innerHTML = "";
+    setupFolderDrop(filesEl, activeFolderPath);
+    if (!folderFiles.length) {
+        filesEl.innerText = "No files in this folder.";
+    } else {
+        folderFiles.forEach((id) => {
+            const row = document.createElement("div");
+            row.className = "folder-row";
+
+            const openBtn = document.createElement("button");
+            openBtn.className = "folder-open nav-btn";
+            const fileFolder = sanitizeFolderPath(activeClients[id].folderPath || "");
+            const relativeFolder = cleanActive && fileFolder.startsWith(cleanActive + "/")
+                ? fileFolder.slice(cleanActive.length + 1)
+                : "";
+            openBtn.textContent = relativeFolder ? relativeFolder + "/" + activeClients[id].name : activeClients[id].name;
+            openBtn.onclick = () => loadClient(id);
+
+            const playBtn = document.createElement("button");
+            playBtn.textContent = "Play";
+            playBtn.onclick = () => {
+                loadClient(id);
+                launchActive();
+            };
+
+            row.appendChild(openBtn);
+            row.appendChild(playBtn);
+            setupClientDrag(row, id);
+            filesEl.appendChild(row);
+        });
+    }
+}
+
+function loadClient(id) {
+    activeID = id;
+    document.getElementById("det-title").innerText = activeClients[id].name;
+    document.getElementById("det-release").innerText = activeClients[id].release || "Unknown";
+    document.getElementById("det-desc").innerText = activeClients[id].desc;
+    renderLaunchOptions(activeClients[id]);
+    updateFavoriteButton();
+    document.getElementById("unstable-warning").style.display = activeClients[id].cat === "Unstable" ? "block" : "none";
+    showView("details-view");
+}
+
+function toggleEditMode() {
+    const active = document.getElementById("edit-pref").checked;
+    document.getElementById("creator-dash").style.display = active ? "block" : "none";
+    const delBtn = document.getElementById("del-btn");
+    if (delBtn) delBtn.style.display = active ? "block" : "none";
+    const launchOptionBtn = document.getElementById("add-launch-option-btn");
+    if (launchOptionBtn) launchOptionBtn.style.display = active ? "inline-block" : "none";
+    const editableFields = ["det-release", "det-desc", "folder-desc"];
+    editableFields.forEach((id) => {
+        const field = document.getElementById(id);
+        if (!field) return;
+        field.contentEditable = active ? "true" : "false";
+        field.classList.toggle("editing", active);
+    });
+    initSidebar();
+}
+
+function saveActiveField(field) {
+    if (!activeID || !activeClients[activeID]) return;
+    const el = document.getElementById("det-" + field);
+    if (!el) return;
+    const value = el.innerText.trim();
+    activeClients[activeID][field] = value || (field === "release" ? "Unknown" : "No description yet.");
+    saveAll();
+    updateHomeDashboard();
+}
+
+function saveFolderDescription() {
+    const el = document.getElementById("folder-desc");
+    if (!el) return;
+    const value = el.innerText.trim();
+    if (value && value !== "No description yet.") {
+        folderDescriptions[activeFolderPath] = value;
+    } else {
+        delete folderDescriptions[activeFolderPath];
+        el.innerText = "No description yet.";
+    }
+    saveFolderDescriptions();
+}
+
+function deleteClient() {
+    if (!activeID) return;
+    if (confirm("Delete this client?")) {
+        delete activeClients[activeID];
+        favoriteClients = favoriteClients.filter((favID) => favID !== activeID);
+        activeID = null;
+        saveAll();
+        saveFavorites();
+        initSidebar();
+        updateHomeDashboard();
+        showView("home-view");
+    }
+}
+
+function toggleSettings() {
+    document.getElementById("right-settings").classList.toggle("open");
+}
+
+function toggleUnstable() {
+    showUnstable = document.getElementById("unstable-toggle").checked;
+    localStorage.setItem("show_unstable", JSON.stringify(showUnstable));
+    initSidebar();
+    updateHomeDashboard();
+}
+
+function toggleOpenInNewTab() {
+    openInNewTab = document.getElementById("new-tab-toggle").checked;
+    localStorage.setItem("open_in_new_tab", JSON.stringify(openInNewTab));
+}
+
+function openSupport() {
+    const div = document.createElement("div");
+    div.style.position = "fixed";
+    div.style.top = "50%";
+    div.style.left = "50%";
+    div.style.transform = "translate(-50%,-50%)";
+    div.style.background = "#111";
+    div.style.padding = "20px";
+    div.style.border = "1px solid #444";
+    div.style.zIndex = "9999";
+
+    div.innerHTML = `
+        <h3>Support</h3>
+        <p>Support Email: VALXW@pm.me</p>
+        <p style="font-size:12px;color:#aaa;">Email for bug support if you need help using launcher options.</p>
+        <button onclick="this.parentElement.remove()">Close</button>
+    `;
+
+    document.body.appendChild(div);
+}
+
+function saveAll() {
+    localStorage.setItem("eagler_merged_db", JSON.stringify(activeClients));
+}
+
+function showView(id) {
+    document.querySelectorAll(".view-section").forEach((v) => v.classList.remove("active"));
+    const view = document.getElementById(id);
+    if (view) view.classList.add("active");
+}
+
+function updateHomeDashboard() {
+    renderClientMergeOptions();
+    const clients = Object.values(activeClients);
+    const total = clients.length;
+    const folderCount = [...new Set(clients.map((c) => sanitizeFolderPath(c.folderPath || c.cat || "Unsorted")))].length;
+    const last = clients[clients.length - 1];
+
+    document.getElementById("notes-info").innerHTML = `
+        <b>Total Clients:</b> ${total}<br>
+        <b>Folders:</b> ${folderCount}<br>
+        <b>Unstable Enabled:</b> ${showUnstable ? "Yes" : "No"}<br>
+        <b>Last Added:</b> ${last ? last.name : "None"}
+    `;
+
+    let suggestedHTML = "";
+    let suggestedCardHTML = "";
+    clients.slice(-3).forEach((c) => {
+        const id = findClientID(c);
+        if (id) suggestedHTML += `<div class="sidebar-link" onclick="loadClient('${id}')">${c.name}</div>`;
+        if (id) {
+            const desc = (c.desc || "No description yet.").slice(0, 120);
+            suggestedCardHTML += `
+                <div style="border-bottom:1px solid #2d2d35;padding:10px 0;">
+                    <b>${c.name}</b>
+                    <p style="color:#a1a1aa;margin-top:6px;">${desc}</p>
+                    <button type="button" style="margin-top:10px;" onclick="playClient('${id}')">PLAY</button>
+                </div>
+            `;
+        }
+    });
+
+    document.getElementById("suggested-list").innerHTML = suggestedHTML || "No clients yet.";
+    document.getElementById("suggested-card-list").innerHTML = suggestedCardHTML || `
+        <div style="color:#a1a1aa;">
+            <b>Client Template</b>
+            <p style="margin-top:6px;">Short description for a suggested client will appear here.</p>
+            <button type="button" style="margin-top:10px;" disabled>PLAY</button>
+        </div>
+    `;
+
+    let favoritesHTML = "";
+    favoriteClients = favoriteClients.filter((id) => activeClients[id]);
+    favoriteClients.forEach((id) => {
+        favoritesHTML += `<div class="sidebar-link" onclick="loadClient('${id}')">${activeClients[id].name}</div>`;
+    });
+    saveFavorites();
+    document.getElementById("favorites-list").innerHTML = favoritesHTML || "No favorites yet.";
+}
+
+function findClientID(clientObj) {
+    for (const id in activeClients) {
+        if (activeClients[id] === clientObj) return id;
+    }
+    return null;
+}
+
+window.onload = () => {
+    activeClients = getUpdatedDatabase();
+    normalizeClients();
+    document.getElementById("unstable-toggle").checked = showUnstable;
+    document.getElementById("new-tab-toggle").checked = openInNewTab;
+    renderFolderOptions();
+    setupDropZone();
+    setupFolderImporter();
+    setupLaunchOptionImporter();
+    initSidebar();
+    updateHomeDashboard();
+    showView("home-view");
+    toggleEditMode();
+
+    document.getElementById("det-release").addEventListener("blur", () => saveActiveField("release"));
+    document.getElementById("det-desc").addEventListener("blur", () => saveActiveField("desc"));
+    document.getElementById("folder-desc").addEventListener("blur", saveFolderDescription);
+
+    const label = document.querySelector("#edit-pref").parentElement;
+    const note = document.createElement("p");
+    note.style.fontSize = "12px";
+    note.style.marginTop = "8px";
+    note.style.color = "#aaa";
+    note.innerText = "Turn this on only when you are adding or editing clients.";
+    label.appendChild(note);
+
+    const settings = document.getElementById("right-settings");
+    const btn = document.createElement("button");
+    btn.innerText = "Support";
+    btn.onclick = openSupport;
+    settings.appendChild(btn);
+};
+</script>
+</body>
+</html>
