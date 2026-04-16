@@ -12,11 +12,11 @@ One last thing, I am not going to respond to every email and if your question is
 When Emailing me Put the title as "Vast Bug" it makes it easier for me and you. Also please mention your web browser, and OS I will work on it as soon as I can.
 
 
-#Bare
+# Bare
 Bare is one of the first builds I made without many features, I made it into its own branch so If people don't want the newest with a lot of features that may be more confusing,its there. 
 
 Bare is for users that want only whats necessary and likely won't be updated.
 
-#More-Features
+# More-Features
 It has more features obviously I will attempt to make a list of the differences
 
