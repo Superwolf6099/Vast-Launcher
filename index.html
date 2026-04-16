@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Vast Launcher V1.0</title>
+<title>Vast Launcher v1.09</title>
 <script src="database.js"></script>
 
 <style>
@@ -31,6 +31,23 @@ body{background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:h
 .drop-zone.drag{border-color:var(--accent);color:var(--accent);}
 
 .card{background:var(--card);padding:1.5rem;border-radius:10px;border:1px solid #2d2d35;margin-top:20px;}
+.toolbar-row{display:flex;gap:12px;flex-wrap:wrap;align-items:end;}
+.toolbar-row .editor-input{margin-top:0;min-width:180px;flex:1;}
+.toolbar-check{display:flex;align-items:center;gap:8px;color:#c7c7d1;font-size:14px;white-space:nowrap;}
+.panel-note{font-size:12px;color:#a1a1aa;margin-top:8px;}
+.status-list{margin-top:10px;padding-left:18px;color:#cfcfd6;}
+.status-list li+li{margin-top:6px;}
+.preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px;}
+.stat-card{background:rgba(255,255,255,0.03);border:1px solid #2d2d35;border-radius:6px;padding:12px;}
+.preview-list{max-height:240px;overflow:auto;border:1px solid #2d2d35;border-radius:6px;padding:10px;margin-top:12px;background:rgba(0,0,0,0.15);}
+.preview-item{padding:8px 0;border-bottom:1px solid #2d2d35;}
+.preview-item:last-child{border-bottom:none;}
+.favorites-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;}
+.favorite-slot{border:1px solid #2d2d35;border-radius:6px;padding:12px;background:rgba(255,255,255,0.03);}
+.favorite-slot-title{font-weight:700;}
+.favorite-slot-meta{font-size:12px;color:#a1a1aa;margin-top:6px;}
+.favorite-slot-actions{display:flex;gap:8px;margin-top:10px;}
+.favorite-slot-actions button{flex:1;}
 
 #right-settings{position:fixed;right:-350px;top:0;width:350px;height:100%;background:var(--side);transition:.3s;padding:2rem;}
 #right-settings.open{right:0;}
@@ -74,7 +91,7 @@ button:hover {
 <body>
 
 <div class="sidebar">
-<div class="launcher-title" onclick="showView('home-view')">Vast</div>
+<div class="launcher-title" onclick="showView('home-view')">Vast-L <span id="app-version-label"></span></div>
 <button class="nav-btn" onclick="showView('home-view')">Home Library</button>
 <p id="notes-info" style="color:#a1a1aa;"></p>
 <div id="suggested-list" style="margin-top:10px;"></div>
@@ -97,10 +114,43 @@ button:hover {
 <input type="checkbox" id="new-tab-toggle" onchange="toggleOpenInNewTab()"> Open clients in new tab
 <p style="font-size:12px;color:#a1a1aa;margin-top:8px;">When pressing play on a client it opens in a new tab instead of getting rid of the launcher.</p>
 </div>
+<div class="card">
+<h3>Favorites Panel</h3>
+<p class="panel-note">Choose how many favorite quick-launch slots show on the home page.</p>
+<input type="number" id="favorite-slot-count" class="editor-input" min="1" max="24" step="1" value="8">
+</div>
+<div class="card">
+<h3>Backup</h3>
+<p class="panel-note">Export your launcher database and restore it later.</p>
+<button type="button" id="export-backup-btn">Export Backup</button>
+<button type="button" id="import-backup-btn">Import Backup</button>
+<input type="file" id="backup-import-input" accept=".json,application/json" style="display:none;">
+</div>
 </div>
 
 <div class="content">
 <div id="home-view" class="view-section active">
+<div class="card" id="library-controls">
+    <h3>Library Filters</h3>
+    <div class="toolbar-row" style="margin-top:12px;">
+        <input type="text" id="library-search" class="editor-input" placeholder="Search clients, descriptions, folders">
+        <select id="library-folder-filter" class="editor-input">
+            <option value="">All folders</option>
+        </select>
+        <select id="library-sort" class="editor-input" style="max-width:220px;">
+            <option value="name">Sort: Name</option>
+            <option value="recent">Sort: Last Added</option>
+            <option value="played">Sort: Last Played</option>
+            <option value="launches">Sort: Launch Count</option>
+        </select>
+        <label class="toolbar-check">
+            <input type="checkbox" id="library-favorites-only">
+            Favorites only
+        </label>
+        <button type="button" id="library-clear-filters">Clear Filters</button>
+    </div>
+    <p id="library-results-info" class="panel-note">Showing all clients.</p>
+</div>
 <div class="home-grid" style="display:grid; grid-template-columns: 1fr 1fr; gap:2rem;">
     <div>
         <h2>Notes!</h2>
@@ -124,7 +174,8 @@ button:hover {
     <div>
         <h2>Favorites</h2>
         <div class="card">
-            <div id="favorites-list" style="color:#a1a1aa;">No favorites yet.</div>
+            <p class="panel-note">Pinned quick-launch slots for your favorite clients.</p>
+            <div id="favorites-list" class="favorites-grid" style="margin-top:12px;color:#a1a1aa;">No favorites yet.</div>
         </div>
     </div>
 </div>
@@ -153,6 +204,17 @@ button:hover {
         <input type="text" id="import-base-path" class="editor-input" placeholder="Import base path (default ./)">
         <button type="button" style="margin-top:10px;" onclick="document.getElementById('folder-import-input').click()">Import Folder Structure</button>
         <input type="file" id="folder-import-input" webkitdirectory directory multiple style="display:none;">
+        <div id="import-preview-card" class="card" style="display:none;">
+            <h4>Import Preview</h4>
+            <p id="import-preview-summary" class="panel-note"></p>
+            <div id="import-preview-stats" class="preview-grid"></div>
+            <ul id="import-preview-warnings" class="status-list"></ul>
+            <div id="import-preview-clients" class="preview-list"></div>
+            <div style="display:flex;gap:10px;margin-top:12px;">
+                <button type="button" id="import-preview-apply">Import Previewed Files</button>
+                <button type="button" id="import-preview-cancel">Cancel Preview</button>
+            </div>
+        </div>
     </div>
     <div class="card" style="margin-top:15px;">
         <h4 style="margin-bottom:10px;">Merge Existing Clients</h4>
@@ -226,6 +288,10 @@ let openInNewTab = JSON.parse(localStorage.getItem("open_in_new_tab") || "true")
 let expandedFolders = new Set(JSON.parse(localStorage.getItem("expanded_folders") || "[]"));
 let draggedFolderPath = "";
 let draggedClientID = "";
+let libraryFilters = JSON.parse(localStorage.getItem("library_filters") || '{"search":"","folder":"","favoritesOnly":false,"sort":"name"}');
+let pendingFolderImport = null;
+let favoriteSlotCount = Number(localStorage.getItem("favorite_slot_count") || "8");
+const APP_VERSION = "v1.09";
 
 function sanitizeFolderPath(input) {
     return (input || "")
@@ -250,6 +316,14 @@ function saveFavorites() {
 
 function saveExpandedFolders() {
     localStorage.setItem("expanded_folders", JSON.stringify([...expandedFolders]));
+}
+
+function saveLibraryFilters() {
+    localStorage.setItem("library_filters", JSON.stringify(libraryFilters));
+}
+
+function saveFavoriteSlotCount() {
+    localStorage.setItem("favorite_slot_count", String(favoriteSlotCount));
 }
 
 function addFolderWithParents(path) {
@@ -287,14 +361,54 @@ function isDirectChildFolder(parentPath, childPath) {
 }
 
 function getVisibleClientIDs() {
-    return Object.keys(activeClients).filter((id) => showUnstable || activeClients[id].cat !== "Unstable");
+    return sortClientIDs(Object.keys(activeClients).filter((id) => clientMatchesFilters(id)));
+}
+
+function clientMatchesFilters(id) {
+    const client = activeClients[id];
+    if (!client) return false;
+    if (!showUnstable && client.cat === "Unstable") return false;
+    if (libraryFilters.favoritesOnly && !favoriteClients.includes(id)) return false;
+
+    const folderPath = sanitizeFolderPath(client.folderPath || "");
+    if (libraryFilters.folder && folderPath !== libraryFilters.folder && !folderPath.startsWith(libraryFilters.folder + "/")) {
+        return false;
+    }
+
+    const search = (libraryFilters.search || "").trim().toLowerCase();
+    if (!search) return true;
+    const haystack = [
+        client.name || "",
+        client.desc || "",
+        folderPath,
+        client.release || "",
+        (client.launches || []).map((launch) => launch.label || "").join(" ")
+    ].join(" ").toLowerCase();
+    return haystack.includes(search);
+}
+
+function sortClientIDs(ids) {
+    const mode = libraryFilters.sort || "name";
+    return [...ids].sort((a, b) => {
+        const clientA = activeClients[a] || {};
+        const clientB = activeClients[b] || {};
+        if (mode === "recent") {
+            return (clientB.createdAt || 0) - (clientA.createdAt || 0) || (clientA.name || "").localeCompare(clientB.name || "");
+        }
+        if (mode === "played") {
+            return (clientB.lastPlayedAt || 0) - (clientA.lastPlayedAt || 0) || (clientA.name || "").localeCompare(clientB.name || "");
+        }
+        if (mode === "launches") {
+            return (clientB.launchCount || 0) - (clientA.launchCount || 0) || (clientA.name || "").localeCompare(clientB.name || "");
+        }
+        return (clientA.name || "").localeCompare(clientB.name || "");
+    });
 }
 
 function getDirectClients(folderPath, visibleIDs) {
     const clean = sanitizeFolderPath(folderPath);
-    return visibleIDs
-        .filter((id) => sanitizeFolderPath(activeClients[id].folderPath || "") === clean)
-        .sort((a, b) => (activeClients[a].name || "").localeCompare(activeClients[b].name || ""));
+    return sortClientIDs(visibleIDs
+        .filter((id) => sanitizeFolderPath(activeClients[id].folderPath || "") === clean));
 }
 
 function getCreatorFolderPath() {
@@ -332,6 +446,73 @@ function renderFolderOptions() {
         opt.textContent = path;
         select.appendChild(opt);
     });
+    renderLibraryFolderFilterOptions();
+}
+
+function renderLibraryFolderFilterOptions() {
+    const select = document.getElementById("library-folder-filter");
+    if (!select) return;
+    const previous = libraryFilters.folder || "";
+    select.innerHTML = '<option value="">All folders</option>';
+    [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b)).forEach((path) => {
+        const opt = document.createElement("option");
+        opt.value = path;
+        opt.textContent = path;
+        select.appendChild(opt);
+    });
+    select.value = previous;
+}
+
+function syncLibraryControls() {
+    const search = document.getElementById("library-search");
+    const folder = document.getElementById("library-folder-filter");
+    const favorites = document.getElementById("library-favorites-only");
+    const sort = document.getElementById("library-sort");
+    if (search) search.value = libraryFilters.search || "";
+    if (folder) folder.value = libraryFilters.folder || "";
+    if (favorites) favorites.checked = !!libraryFilters.favoritesOnly;
+    if (sort) sort.value = libraryFilters.sort || "name";
+}
+
+function refreshLibraryViews() {
+    saveLibraryFilters();
+    initSidebar();
+    updateHomeDashboard();
+    if (document.getElementById("folder-view").classList.contains("active")) {
+        renderFolderView();
+    }
+}
+
+function setupLibraryControls() {
+    const search = document.getElementById("library-search");
+    const folder = document.getElementById("library-folder-filter");
+    const favorites = document.getElementById("library-favorites-only");
+    const sort = document.getElementById("library-sort");
+    const clearBtn = document.getElementById("library-clear-filters");
+    if (!search || !folder || !favorites || !sort || !clearBtn) return;
+
+    search.addEventListener("input", () => {
+        libraryFilters.search = search.value || "";
+        refreshLibraryViews();
+    });
+    folder.addEventListener("change", () => {
+        libraryFilters.folder = folder.value || "";
+        refreshLibraryViews();
+    });
+    favorites.addEventListener("change", () => {
+        libraryFilters.favoritesOnly = favorites.checked;
+        refreshLibraryViews();
+    });
+    sort.addEventListener("change", () => {
+        libraryFilters.sort = sort.value || "name";
+        refreshLibraryViews();
+    });
+    clearBtn.addEventListener("click", () => {
+        libraryFilters = { search: "", folder: "", favoritesOnly: false, sort: "name" };
+        syncLibraryControls();
+        refreshLibraryViews();
+    });
+    syncLibraryControls();
 }
 
 function renderClientMergeOptions() {
@@ -343,19 +524,30 @@ function renderClientMergeOptions() {
     const previousTarget = target.value;
     const options = Object.keys(activeClients)
         .sort((a, b) => (activeClients[a].name || "").localeCompare(activeClients[b].name || ""));
+    const nameCounts = {};
+    options.forEach((id) => {
+        const key = (activeClients[id].name || "Unnamed client").trim().toLowerCase();
+        nameCounts[key] = (nameCounts[key] || 0) + 1;
+    });
 
     source.innerHTML = '<option value="">Source client</option>';
     target.innerHTML = '<option value="">Target client</option>';
 
     options.forEach((id) => {
+        const client = activeClients[id];
+        const name = (client.name || "Unnamed client").trim();
+        const duplicateName = nameCounts[name.toLowerCase()] > 1;
+        const folderPath = sanitizeFolderPath(client.folderPath || "");
+        const label = duplicateName ? name + " (" + (folderPath || "Root Folder") + ")" : name;
+
         const sourceOpt = document.createElement("option");
         sourceOpt.value = id;
-        sourceOpt.textContent = activeClients[id].name;
+        sourceOpt.textContent = label;
         source.appendChild(sourceOpt);
 
         const targetOpt = document.createElement("option");
         targetOpt.value = id;
-        targetOpt.textContent = activeClients[id].name;
+        targetOpt.textContent = label;
         target.appendChild(targetOpt);
     });
 
@@ -369,6 +561,9 @@ function normalizeClients() {
         if (!client.desc) client.desc = "No description yet.";
         if (!client.release) client.release = "Unknown";
         if (!Array.isArray(client.launches)) client.launches = [];
+        if (!client.createdAt) client.createdAt = Date.now();
+        if (!client.launchCount) client.launchCount = 0;
+        if (!client.lastPlayedAt) client.lastPlayedAt = 0;
         if (!client.folderPath) client.folderPath = sanitizeFolderPath(client.cat || "Unsorted");
         client.folderPath = sanitizeFolderPath(client.folderPath);
         client.launches = client.launches.filter((l) => l && (l.path || l.html));
@@ -428,7 +623,10 @@ function handleFileMerge(file) {
             folderPath: getCreatorFolderPath() || sanitizeFolderPath(document.getElementById("add-cat").value),
             desc: "Merged: " + file.name,
             release: new Date().toISOString().slice(0, 10),
-            launches: [{ label: "Local", html: e.target.result, fileName: file.name }]
+            launches: [{ label: "Local", html: e.target.result, fileName: file.name }],
+            createdAt: Date.now(),
+            launchCount: 0,
+            lastPlayedAt: 0
         };
         addFolderWithParents(activeClients[id].folderPath);
         folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -467,6 +665,22 @@ function normalizeBaseName(fileName) {
         .trim() || fileName.replace(/\.html?$/i, "");
 }
 
+function getFileStem(fileName) {
+    return (fileName || "").replace(/\.html?$/i, "").trim();
+}
+
+function getImportClientName(fileName, folderPath) {
+    const stem = getFileStem(fileName);
+    if (/^(js|wasm)$/i.test(stem)) {
+        return getFolderName(folderPath);
+    }
+    return normalizeBaseName(fileName);
+}
+
+function getUnmergedImportClientName(fileName) {
+    return (fileName || "").trim() || normalizeBaseName(fileName);
+}
+
 function buildJoinedPath(base, relative) {
     const safeBase = (base || "./").trim() || "./";
     const cleanRelative = relative.replace(/\\/g, "/");
@@ -481,11 +695,10 @@ function findClientByFolderAndName(folderPath, name) {
     return matchID || null;
 }
 
-function importFolderStructure(fileList) {
-    if (!fileList || !fileList.length) return;
-    const basePath = document.getElementById("import-base-path").value || "./";
-    let createdClients = 0;
-    let addedLaunches = 0;
+function analyzeFolderImport(fileList, basePath) {
+    if (!fileList || !fileList.length) return null;
+    const groups = {};
+    let htmlFiles = 0;
 
     Array.from(fileList).forEach((file) => {
         const relativePath = (file.webkitRelativePath || "").replace(/\\/g, "/");
@@ -494,50 +707,178 @@ function importFolderStructure(fileList) {
         const parts = relativePath.split("/");
         const fileName = parts.pop();
         const folderPath = sanitizeFolderPath(parts.join("/"));
-        addFolderWithParents(folderPath);
-
         if (!/\.html?$/i.test(fileName)) return;
+        htmlFiles += 1;
 
         const launchLabel = detectLaunchLabel(fileName);
-        const clientName = normalizeBaseName(fileName);
+        const clientName = getImportClientName(fileName, folderPath);
         const launchPath = buildJoinedPath(basePath, relativePath);
-        let clientID = findClientByFolderAndName(folderPath, clientName);
+        const groupKey = JSON.stringify([folderPath.toLowerCase(), clientName.toLowerCase()]);
+        if (!groups[groupKey]) {
+            groups[groupKey] = {
+                folderPath: folderPath,
+                clientName: clientName,
+                records: [],
+                variantCounts: { JS: 0, WASM: 0 },
+                isAmbiguous: false
+            };
+        }
+        const record = {
+            fileName: fileName,
+            folderPath: folderPath,
+            launchLabel: launchLabel,
+            clientName: clientName,
+            launchPath: launchPath
+        };
+        groups[groupKey].records.push(record);
+        if (launchLabel === "JS" || launchLabel === "WASM") groups[groupKey].variantCounts[launchLabel] += 1;
+    });
 
+    const previewGroups = [];
+    const warnings = [];
+    let mergesIntoExisting = 0;
+    let newClients = 0;
+
+    Object.keys(groups).forEach((key) => {
+        const group = groups[key];
+        group.isAmbiguous = group.variantCounts.JS > 1 || group.variantCounts.WASM > 1;
+        if (group.isAmbiguous) {
+            warnings.push("Skipped auto-merge for " + (group.folderPath || "Root Folder") + "/" + group.clientName + " because it has multiple JS or WASM variants.");
+        }
+        const splitGroups = group.isAmbiguous ? group.records.map((record) => ({
+            folderPath: group.folderPath,
+            clientName: getUnmergedImportClientName(record.fileName),
+            records: [record],
+            warning: true
+        })) : [{
+            folderPath: group.folderPath,
+            clientName: group.clientName,
+            records: group.records,
+            warning: false
+        }];
+
+        splitGroups.forEach((previewGroup) => {
+            const existingClientID = findClientByFolderAndName(previewGroup.folderPath, previewGroup.clientName);
+            if (existingClientID) mergesIntoExisting += 1;
+            else newClients += 1;
+            previewGroup.existingClientID = existingClientID;
+            previewGroups.push(previewGroup);
+        });
+    });
+
+    return {
+        basePath: basePath,
+        htmlFiles: htmlFiles,
+        newClients: newClients,
+        mergesIntoExisting: mergesIntoExisting,
+        warnings: warnings,
+        previewGroups: previewGroups
+    };
+}
+
+function clearImportPreview() {
+    pendingFolderImport = null;
+    const card = document.getElementById("import-preview-card");
+    if (card) card.style.display = "none";
+    const input = document.getElementById("folder-import-input");
+    if (input) input.value = "";
+}
+
+function renderImportPreview(analysis) {
+    const card = document.getElementById("import-preview-card");
+    const summary = document.getElementById("import-preview-summary");
+    const stats = document.getElementById("import-preview-stats");
+    const warnings = document.getElementById("import-preview-warnings");
+    const clients = document.getElementById("import-preview-clients");
+    if (!card || !summary || !stats || !warnings || !clients) return;
+
+    summary.textContent = "Review " + analysis.htmlFiles + " HTML files before importing them.";
+    stats.innerHTML = `
+        <div class="stat-card"><b>${analysis.previewGroups.length}</b><div class="panel-note">Client entries</div></div>
+        <div class="stat-card"><b>${analysis.newClients}</b><div class="panel-note">New clients</div></div>
+        <div class="stat-card"><b>${analysis.mergesIntoExisting}</b><div class="panel-note">Merge into existing</div></div>
+    `;
+    warnings.innerHTML = analysis.warnings.length
+        ? analysis.warnings.map((warning) => `<li>${warning}</li>`).join("")
+        : "<li>No import warnings.</li>";
+    clients.innerHTML = analysis.previewGroups.map((group) => {
+        const labels = group.records.map((record) => record.launchLabel).join(", ");
+        const target = group.existingClientID ? "Merge into existing client" : "Create new client";
+        const folder = group.folderPath || "Root Folder";
+        return `
+            <div class="preview-item">
+                <b>${group.clientName}</b>
+                <div class="panel-note">${folder} · ${target}</div>
+                <div class="panel-note">Launch options: ${labels}</div>
+            </div>
+        `;
+    }).join("");
+    card.style.display = "block";
+}
+
+function importFolderStructure(analysis) {
+    if (!analysis || !analysis.previewGroups || !analysis.previewGroups.length) return;
+    let createdClients = 0;
+    let addedLaunches = 0;
+
+    analysis.previewGroups.forEach((group) => {
+        addFolderWithParents(group.folderPath);
+        let clientID = findClientByFolderAndName(group.folderPath, group.clientName);
         if (!clientID) {
             clientID = "import_" + Date.now() + "_" + Math.random().toString(36).slice(2, 7);
             activeClients[clientID] = {
-                name: clientName,
+                name: group.clientName,
                 cat: document.getElementById("add-cat").value,
-                folderPath: folderPath,
+                folderPath: group.folderPath,
                 release: "Unknown",
                 desc: "Imported from folder structure.",
-                launches: []
+                launches: [],
+                createdAt: Date.now(),
+                launchCount: 0,
+                lastPlayedAt: 0
             };
             createdClients += 1;
         }
 
-        const exists = activeClients[clientID].launches.some((l) => l.path === launchPath);
-        if (!exists) {
-            activeClients[clientID].launches.push({ label: launchLabel, path: launchPath });
-            addedLaunches += 1;
-        }
+        group.records.forEach((record) => {
+            const exists = activeClients[clientID].launches.some((launch) => launch.path === record.launchPath);
+            if (!exists) {
+                activeClients[clientID].launches.push({ label: record.launchLabel, path: record.launchPath });
+                addedLaunches += 1;
+            }
+        });
     });
 
     folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
     saveFolders();
     saveAll();
     renderFolderOptions();
+    renderLibraryFolderFilterOptions();
     initSidebar();
     updateHomeDashboard();
+    clearImportPreview();
     alert("Imported folder structure. New clients: " + createdClients + ", launch files added: " + addedLaunches + ".");
 }
 
 function setupFolderImporter() {
     const input = document.getElementById("folder-import-input");
+    const applyBtn = document.getElementById("import-preview-apply");
+    const cancelBtn = document.getElementById("import-preview-cancel");
     input.addEventListener("change", () => {
-        importFolderStructure(input.files);
-        input.value = "";
+        const analysis = analyzeFolderImport(input.files, document.getElementById("import-base-path").value || "./");
+        if (!analysis || !analysis.htmlFiles) {
+            clearImportPreview();
+            alert("No HTML files were found in that folder selection.");
+            return;
+        }
+        pendingFolderImport = analysis;
+        renderImportPreview(analysis);
     });
+    applyBtn.addEventListener("click", () => {
+        if (!pendingFolderImport) return;
+        importFolderStructure(pendingFolderImport);
+    });
+    cancelBtn.addEventListener("click", clearImportPreview);
 }
 
 function addPathClient() {
@@ -565,7 +906,10 @@ function addPathClient() {
         folderPath: getCreatorFolderPath() || sanitizeFolderPath(document.getElementById("add-cat").value),
         release: (document.getElementById("path-release").value || "").trim() || "Unknown",
         desc: (document.getElementById("path-desc").value || "").trim() || "Path-based client.",
-        launches: launches
+        launches: launches,
+        createdAt: Date.now(),
+        launchCount: 0,
+        lastPlayedAt: 0
     };
     addFolderWithParents(activeClients[id].folderPath);
     folders = [...new Set(folders.map(sanitizeFolderPath).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -904,7 +1248,7 @@ function toggleFavorite() {
     favoriteClients = [...new Set(favoriteClients)].filter((id) => activeClients[id]);
     saveFavorites();
     updateFavoriteButton();
-    updateHomeDashboard();
+    refreshLibraryViews();
 }
 
 function addMergedLaunchOption(file) {
@@ -960,6 +1304,10 @@ function launchActive() {
         alert("Pick a client first.");
         return;
     }
+    activeClients[activeID].launchCount = (activeClients[activeID].launchCount || 0) + 1;
+    activeClients[activeID].lastPlayedAt = Date.now();
+    saveAll();
+    updateHomeDashboard();
     const launch = getSelectedLaunch(activeClients[activeID]);
     let launchTarget = launch.path || "";
 
@@ -1145,14 +1493,14 @@ function renderFolderView() {
             const fileFolder = sanitizeFolderPath(activeClients[id].folderPath || "");
             if (!cleanActive) return true;
             return fileFolder === cleanActive || fileFolder.startsWith(cleanActive + "/");
-        })
-        .sort((a, b) => (activeClients[a].name || "").localeCompare(activeClients[b].name || ""));
+        });
+    const sortedFolderFiles = sortClientIDs(folderFiles);
     filesEl.innerHTML = "";
     setupFolderDrop(filesEl, activeFolderPath);
-    if (!folderFiles.length) {
+    if (!sortedFolderFiles.length) {
         filesEl.innerText = "No files in this folder.";
     } else {
-        folderFiles.forEach((id) => {
+        sortedFolderFiles.forEach((id) => {
             const row = document.createElement("div");
             row.className = "folder-row";
 
@@ -1252,8 +1600,7 @@ function toggleSettings() {
 function toggleUnstable() {
     showUnstable = document.getElementById("unstable-toggle").checked;
     localStorage.setItem("show_unstable", JSON.stringify(showUnstable));
-    initSidebar();
-    updateHomeDashboard();
+    refreshLibraryViews();
 }
 
 function toggleOpenInNewTab() {
@@ -1286,6 +1633,107 @@ function saveAll() {
     localStorage.setItem("eagler_merged_db", JSON.stringify(activeClients));
 }
 
+function exportBackup() {
+    const payload = {
+        version: 1,
+        exportedAt: new Date().toISOString(),
+        activeClients: activeClients,
+        folders: folders,
+        folderDescriptions: folderDescriptions,
+        favoriteClients: favoriteClients,
+        expandedFolders: [...expandedFolders],
+        settings: {
+            showUnstable: showUnstable,
+            openInNewTab: openInNewTab,
+            libraryFilters: libraryFilters,
+            favoriteSlotCount: favoriteSlotCount
+        }
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "vast-launcher-backup-" + new Date().toISOString().slice(0, 10) + ".json";
+    link.click();
+    URL.revokeObjectURL(url);
+}
+
+function importBackupFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        try {
+            const parsed = JSON.parse(event.target.result);
+            if (!parsed || typeof parsed !== "object" || !parsed.activeClients) {
+                throw new Error("Invalid backup format");
+            }
+            if (!confirm("Import this backup and replace the current launcher library?")) return;
+            activeClients = parsed.activeClients || {};
+            folders = Array.isArray(parsed.folders) ? parsed.folders : [];
+            folderDescriptions = parsed.folderDescriptions || {};
+            favoriteClients = Array.isArray(parsed.favoriteClients) ? parsed.favoriteClients : [];
+            expandedFolders = new Set(Array.isArray(parsed.expandedFolders) ? parsed.expandedFolders : []);
+            if (parsed.settings) {
+                showUnstable = parsed.settings.showUnstable !== undefined ? !!parsed.settings.showUnstable : showUnstable;
+                openInNewTab = parsed.settings.openInNewTab !== undefined ? !!parsed.settings.openInNewTab : openInNewTab;
+                libraryFilters = parsed.settings.libraryFilters || libraryFilters;
+                favoriteSlotCount = parsed.settings.favoriteSlotCount !== undefined ? Number(parsed.settings.favoriteSlotCount) : favoriteSlotCount;
+            }
+            normalizeClients();
+            saveAll();
+            saveFolders();
+            saveFolderDescriptions();
+            saveFavorites();
+            saveExpandedFolders();
+            saveLibraryFilters();
+            saveFavoriteSlotCount();
+            document.getElementById("unstable-toggle").checked = showUnstable;
+            document.getElementById("new-tab-toggle").checked = openInNewTab;
+            renderFolderOptions();
+            syncLibraryControls();
+            const favoriteCountInput = document.getElementById("favorite-slot-count");
+            if (favoriteCountInput) favoriteCountInput.value = String(Math.min(24, Math.max(1, Number(favoriteSlotCount) || 8)));
+            refreshLibraryViews();
+            alert("Backup imported.");
+        } catch (err) {
+            alert("Could not import that backup file.");
+        }
+    };
+    reader.onerror = function() {
+        alert("Could not read that backup file.");
+    };
+    reader.readAsText(file);
+}
+
+function setupBackupControls() {
+    const exportBtn = document.getElementById("export-backup-btn");
+    const importBtn = document.getElementById("import-backup-btn");
+    const input = document.getElementById("backup-import-input");
+    if (!exportBtn || !importBtn || !input) return;
+    exportBtn.addEventListener("click", exportBackup);
+    importBtn.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => {
+        const file = input.files[0];
+        if (file) importBackupFile(file);
+        input.value = "";
+    });
+}
+
+function setupFavoriteSlotControl() {
+    const input = document.getElementById("favorite-slot-count");
+    if (!input) return;
+    const clamped = Math.min(24, Math.max(1, Number(favoriteSlotCount) || 8));
+    favoriteSlotCount = clamped;
+    input.value = String(clamped);
+    input.addEventListener("change", () => {
+        const next = Math.min(24, Math.max(1, Number(input.value) || 8));
+        favoriteSlotCount = next;
+        input.value = String(next);
+        saveFavoriteSlotCount();
+        updateHomeDashboard();
+    });
+}
+
 function showView(id) {
     document.querySelectorAll(".view-section").forEach((v) => v.classList.remove("active"));
     const view = document.getElementById(id);
@@ -1294,24 +1742,31 @@ function showView(id) {
 
 function updateHomeDashboard() {
     renderClientMergeOptions();
-    const clients = Object.values(activeClients);
-    const total = clients.length;
-    const folderCount = [...new Set(clients.map((c) => sanitizeFolderPath(c.folderPath || c.cat || "Unsorted")))].length;
-    const last = clients[clients.length - 1];
+    const allIDs = Object.keys(activeClients);
+    const visibleIDs = getVisibleClientIDs();
+    const clients = visibleIDs.map((id) => activeClients[id]);
+    const total = allIDs.length;
+    const folderCount = [...new Set(allIDs.map((id) => sanitizeFolderPath((activeClients[id] || {}).folderPath || (activeClients[id] || {}).cat || "Unsorted")))].length;
+    const last = sortClientIDs(allIDs).find((id) => activeClients[id]);
+    const lastClient = last ? activeClients[last] : null;
 
     document.getElementById("notes-info").innerHTML = `
         <b>Total Clients:</b> ${total}<br>
+        <b>Showing:</b> ${visibleIDs.length}<br>
         <b>Folders:</b> ${folderCount}<br>
         <b>Unstable Enabled:</b> ${showUnstable ? "Yes" : "No"}<br>
-        <b>Last Added:</b> ${last ? last.name : "None"}
+        <b>Top Result:</b> ${lastClient ? lastClient.name : "None"}
     `;
+    document.getElementById("library-results-info").textContent = visibleIDs.length === total
+        ? "Showing all clients."
+        : "Showing " + visibleIDs.length + " of " + total + " clients.";
 
     let suggestedHTML = "";
     let suggestedCardHTML = "";
-    clients.slice(-3).forEach((c) => {
-        const id = findClientID(c);
+    visibleIDs.slice(0, 3).forEach((id) => {
+        const c = activeClients[id];
         if (id) suggestedHTML += `<div class="sidebar-link" onclick="loadClient('${id}')">${c.name}</div>`;
-        if (id) {
+        if (id && c) {
             const desc = (c.desc || "No description yet.").slice(0, 120);
             suggestedCardHTML += `
                 <div style="border-bottom:1px solid #2d2d35;padding:10px 0;">
@@ -1334,11 +1789,24 @@ function updateHomeDashboard() {
 
     let favoritesHTML = "";
     favoriteClients = favoriteClients.filter((id) => activeClients[id]);
-    favoriteClients.forEach((id) => {
-        favoritesHTML += `<div class="sidebar-link" onclick="loadClient('${id}')">${activeClients[id].name}</div>`;
+    sortClientIDs(favoriteClients.filter((id) => clientMatchesFilters(id))).slice(0, favoriteSlotCount).forEach((id) => {
+        const client = activeClients[id];
+        const folderPath = sanitizeFolderPath(client.folderPath || "") || "Root Folder";
+        const launchLabel = ((client.launches || [])[0] || {}).label || "No launch option";
+        favoritesHTML += `
+            <div class="favorite-slot">
+                <div class="favorite-slot-title">${client.name}</div>
+                <div class="favorite-slot-meta">${folderPath}</div>
+                <div class="favorite-slot-meta">Default: ${launchLabel}</div>
+                <div class="favorite-slot-actions">
+                    <button type="button" onclick="loadClient('${id}')">Open</button>
+                    <button type="button" onclick="playClient('${id}')">Play</button>
+                </div>
+            </div>
+        `;
     });
     saveFavorites();
-    document.getElementById("favorites-list").innerHTML = favoritesHTML || "No favorites yet.";
+    document.getElementById("favorites-list").innerHTML = favoritesHTML || '<div class="panel-note">No favorites yet.</div>';
 }
 
 function findClientID(clientObj) {
@@ -1349,14 +1817,20 @@ function findClientID(clientObj) {
 }
 
 window.onload = () => {
+    document.title = "Vast Launcher " + APP_VERSION;
+    const versionLabel = document.getElementById("app-version-label");
+    if (versionLabel) versionLabel.innerText = APP_VERSION;
     activeClients = getUpdatedDatabase();
     normalizeClients();
     document.getElementById("unstable-toggle").checked = showUnstable;
     document.getElementById("new-tab-toggle").checked = openInNewTab;
     renderFolderOptions();
+    setupLibraryControls();
     setupDropZone();
     setupFolderImporter();
     setupLaunchOptionImporter();
+    setupBackupControls();
+    setupFavoriteSlotControl();
     initSidebar();
     updateHomeDashboard();
     showView("home-view");
